@@ -16,7 +16,7 @@
         .result-text { line-height: 1.5; font-size: 0.95rem; color: #4a5568; margin: 0; }
         .status { font-weight: bold; color: #2a5298; margin-top: 20px; }
     </style>
-    <!-- Подключаем стабильные производственные библиотеки Google MediaPipe Tasks -->
+    <!-- Официальный CDN стабильного Vision-пакета MediaPipe Tasks -->
     <script src="https://jsdelivr.net" crossorigin="anonymous"></script>
 </head>
 <body>
@@ -41,7 +41,7 @@
     <script>
         const MODEL_FILE = 'model.tflite';
 
-        // Историческая патриотическая база данных
+        // Патриотическая база данных достопримечательностей
         const CULTURE_DB = {
             0: { title: "Площадь Победы", history: "Памятное место в центре Минска в честь подвига народа в годы Великой Отечественной войны. В центре установлен 38-метровый гранитный монумент, у подножия которого горит Вечный огонь." },
             1: { title: "Музей истории ВОВ", history: "Один из крупнейших в мире музеев, посвященных Второй мировой войне. Открыт в новом величественном здании в 2014 году, символ стойкости народа." },
@@ -55,7 +55,7 @@
         const videoElement = document.getElementById('webcam');
         const statusElement = document.getElementById('status');
 
-        // Шаг 1: Нативная активация камеры Android
+        // Нативная активация камеры смартфона
         async function setupCamera() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
@@ -73,36 +73,36 @@
             }
         }
 
-        // Шаг 2: Инициализация классификатора MediaPipe и загрузка model.tflite
+        // Инициализация Wasm-классификатора через MediaPipe SDK
         async function init() {
             try {
                 await setupCamera();
-                statusElement.innerText = "Камера готова. Инициализация Wasm ИИ-ядра...";
+                statusElement.innerText = "Камера готова. Инициализация ИИ-ядра...";
                 
-                // Загружаем фабрику MediaPipe
-                const vision = await FilesetResolver.forVisionTasks(
+                // Достаем деструктурированные методы из глобального бандла mpSdk
+                const vision = await mpSdk.FilesetResolver.forVisionTasks(
                     "https://jsdelivr.net"
                 );
                 
-                statusElement.innerText = "Загрузка мобильной модели model.tflite...";
+                statusElement.innerText = "Считывание файла модели model.tflite...";
                 
-                // Инициализируем классификатор напрямую из локального файла репозитория
-                imageClassifier = await ImageClassifier.createFromOptions(vision, {
+                // Создаем инференс-классификатор модели
+                imageClassifier = await mpSdk.ImageClassifier.createFromOptions(vision, {
                     baseOptions: {
                         modelAssetPath: MODEL_FILE,
-                        delegate: "GPU" // Задействуем видеочип смартфона для быстродействия
+                        delegate: "GPU"
                     },
                     runningMode: "VIDEO",
                     maxResults: 1
                 });
                 
-                statusElement.innerText = "ИИ успешно загружен! Наведите камеру на объект.";
+                statusElement.innerText = "ИИ готов! Наведите камеру на памятник.";
                 statusElement.style.color = "green";
                 
-                // Запуск бесконечного цикла обработки кадров
+                // Старт постоянного покадрового цикла
                 window.requestAnimationFrame(predictLoop);
             } catch (err) {
-                statusElement.innerText = "Ошибка ИИ: Не удалось инициализировать классификатор MediaPipe.";
+                statusElement.innerText = "Ошибка ИИ: Не удалось запустить классификатор MediaPipe.";
                 statusElement.style.color = "red";
                 console.error(err);
             }
@@ -113,19 +113,17 @@
                 lastVideoTime = videoElement.currentTime;
                 
                 if (imageClassifier) {
-                    // Запуск классификации кадра средствами MediaPipe
                     const startTimeMs = performance.now();
                     const classificationResult = imageClassifier.classifyForVideo(videoElement, startTimeMs);
                     
-                    if (classificationResult.classifications[0].categories.length > 0) {
+                    if (classificationResult.classifications && classificationResult.classifications[0].categories.length > 0) {
                         const category = classificationResult.classifications[0].categories[0];
                         const bestScore = category.score;
                         const bestClass = category.categoryName;
                         
-                        // Парсим индекс класса (MediaPipe возвращает индекс в виде строки или имени)
+                        // Парсим числовой индекс класса (от 0 до 4)
                         let classIndex = parseInt(bestClass);
                         if (isNaN(classIndex)) {
-                            // Если Teachable Machine зашил текстовые имена, парсим по ключевым словам
                             if (bestClass.includes("Class 1") || bestClass.includes("0")) classIndex = 0;
                             if (bestClass.includes("Class 2") || bestClass.includes("1")) classIndex = 1;
                             if (bestClass.includes("Class 3") || bestClass.includes("2")) classIndex = 2;
@@ -133,7 +131,7 @@
                             if (bestClass.includes("Class 5") || bestClass.includes("4")) classIndex = 4;
                         }
 
-                        // Если уверенность ИИ выше 70%
+                        // Если уверенность ИИ выше 70% — выводим карточку с текстом
                         if (bestScore > 0.70 && CULTURE_DB[classIndex]) {
                             document.getElementById("res-title").innerText = CULTURE_DB[classIndex].title + ` (${(bestScore * 100).toFixed(0)}%)`;
                             document.getElementById("res-history").innerText = CULTURE_DB[classIndex].history;
@@ -145,7 +143,7 @@
             window.requestAnimationFrame(predictLoop);
         }
 
-        // Старт программы
+        // Старт
         init();
     </script>
 </body>
