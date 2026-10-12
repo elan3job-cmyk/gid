@@ -45,7 +45,7 @@
             "Class 1": { title: "Площадь Победы", history: "Памятное место в центре Минска в честь подвига народа в годы Великой Отечественной войны. В центре установлен 38-метровый гранитный монумент, у подножия которого горит Вечный огонь." },
             "Class 2": { title: "Музей истории ВОВ", history: "Один из крупнейших в мире музеев, посвященных Второй мировой войне. Открыт в новом величественном здании в 2014 году, символ стойкости народа." },
             "Class 3": { title: "Национальная библиотека Беларуси", history: "Уникальное архитектурное здание в форме ромбокубооктаэдра («алмаза знаний»), открытое в 2006 году. Высота составляет 73,6 метра." },
-            "Class 4": { title: "Красный костёл", history: "Католический храм Святых Симеона и Елены в неоготическом стиле на площади Независимости. Возведен in 1910 году на средства Эдварда Войниловича." },
+            "Class 4": { title: "Красный костёл", history: "Католический храм Святых Симеона и Елены в неоготическом стиле на площади Независимости. Возведен в 1910 году на средства Эдварда Войниловича." },
             "Class 5": { title: "Свято-Духов собор", history: "Главный православный храм Минска. Построен в 1633—1642 годах как костел бернардинок, выдающийся образец виленского барокко." }
         };
 
@@ -57,7 +57,7 @@
         async function setupCamera() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: "environment" }, // Задняя камера телефона
+                    video: { facingMode: "environment" },
                     audio: false
                 });
                 videoElement.srcObject = stream;
@@ -71,14 +71,17 @@
             }
         }
 
-        // Шаг 2: Загрузка локальной модели через правильный загрузчик tmImage
+        // Шаг 2: Загрузка модели через прямые Raw-ссылки вашего репозитория для обхода CORS
         async function init() {
             try {
                 await setupCamera();
-                statusElement.innerText = "Камера готова. Загрузка файлов нейросети...";
+                statusElement.innerText = "Камера готова. Авторизация ИИ-компонентов...";
                 
-                // Передаем прямые локальные пути к файлам в вашем репозитории GitHub
-                model = await tmImage.load('model.json', 'metadata.json');
+                // ИСПОЛЬЗУЕМ ПРЯМЫЕ ССЫЛКИ НА ВАШ РЕПОЗИТОРИЙ GID ДЛЯ СНЯТИЯ БЛОКИРОВОК GITHUB
+                const modelJsonURL = "https://githubusercontent.com";
+                const metadataJsonURL = "https://githubusercontent.com";
+                
+                model = await tmImage.load(modelJsonURL, metadataJsonURL);
                 maxPredictions = model.getTotalClasses();
                 
                 statusElement.innerText = "ИИ успешно загружен! Наведите камеру на объект.";
@@ -86,7 +89,7 @@
                 
                 window.requestAnimationFrame(loop);
             } catch (err) {
-                statusElement.innerText = "Ошибка загрузки ИИ-модели. Проверьте файлы в репозитории.";
+                statusElement.innerText = "Ошибка десериализации. Проверьте файлы репозитория.";
                 statusElement.style.color = "red";
                 console.error(err);
             }
@@ -99,8 +102,6 @@
 
         async function predict() {
             if (!model) return;
-            
-            // Запуск распознавания видеопотока через Teachable Machine
             const prediction = await model.predict(videoElement);
             
             let bestClass = "";
@@ -112,7 +113,6 @@
                 }
             }
 
-            // Если точность ИИ выше 75%, выводим карточку с историей
             if (bestScore > 0.75 && CULTURE_DB[bestClass]) {
                 document.getElementById("res-title").innerText = CULTURE_DB[bestClass].title + ` (${(bestScore * 100).toFixed(0)}%)`;
                 document.getElementById("res-history").innerText = CULTURE_DB[bestClass].history;
@@ -120,7 +120,6 @@
             }
         }
 
-        // Старт
         init();
     </script>
 </body>
