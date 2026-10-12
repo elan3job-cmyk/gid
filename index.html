@@ -16,7 +16,9 @@
         .result-text { line-height: 1.5; font-size: 0.95rem; color: #4a5568; margin: 0; }
         .status { font-weight: bold; color: #2a5298; margin-top: 20px; }
     </style>
-    <!-- Подключаем только базовое ядро TensorFlow.js для максимальной стабильности вычислений -->
+    
+    <!-- ФИКСИРУЕМ СОВМЕСТИМЫЕ С ТЕАCHABLE MACHINE ВЕРСИИ БИБЛИОТЕК GOOGLE -->
+    <script src="https://jsdelivr.net"></script>
     <script src="https://jsdelivr.net"></script>
 </head>
 <body>
@@ -39,18 +41,19 @@
     </div>
 
     <script>
-        // ИСПОЛЬЗУЕМ ПРЯМУЮ ВЕРИФИЦИРОВАННУЮ ССЫЛКУ НА ВАШУ ОБЛАЧНУЮ МОДЕЛЬ GOOGLE
-        const MODEL_URL = "https://withgoogle.com";
+        // Ваша прямая проверенная ссылка на модель в облаке Google
+        const URL = "https://teachablemachine.withgoogle.com/models/BqRAJECV6/";
 
+        // База данных Минска. Имена (Class 1, Class 2...) строго соответствуют вашему проекту
         const CULTURE_DB = {
-            0: { title: "Площадь Победы", history: "Памятное место в центре Минска в честь подвига народа в годы Великой Отечественной войны. В центре установлен 38-метровый гранитный монумент, у подножия которого горит Вечный огонь." },
-            1: { title: "Музей истории ВОВ", history: "Один из крупнейших в мире музеев, посвященных Второй мировой войне. Открыт в новом величественном здании в 2014 году, символ стойкости народа." },
-            2: { title: "Национальная библиотека Беларуси", history: "Уникальное архитектурное здание в форме ромбокубооктаэдра («алмаза знаний»), открытое в 2006 году. Высота составляет 73,6 метра." },
-            3: { title: "Красный костёл", history: "Католический храм Святых Симеона и Елены в неоготическом стиле на площади Независимости. Возведен в 1910 году на средства Эдварда Войниловича." },
-            4: { title: "Свято-Духов собор", history: "Главный православный храм Минска. Построен в 1633—1642 годах как костел бернардинок, выдающийся образец виленского барокко." }
+            "Class 1": { title: "Площадь Победы", history: "Памятное место в центре Минска в честь подвига народа в годы Великой Отечественной войны. В центре установлен 38-метровый гранитный монумент, у подножия которого горит Вечный огонь." },
+            "Class 2": { title: "Музей истории ВОВ", history: "Один из крупнейших в мире музеев, посвященных Второй мировой войне. Открыт в новом величественном здании в 2014 году, символ стойкости народа." },
+            "Class 3": { title: "Национальная библиотека Беларуси", history: "Уникальное архитектурное здание в форме ромбокубооктаэдра («алмаза знаний»), открытое в 2006 году. Высота составляет 73,6 метра." },
+            "Class 4": { title: "Красный костёл", history: "Католический храм Святых Симеона и Елены в неоготическом стиле на площади Независимости. Возведен в 1910 году на средства Эдварда Войниловича." },
+            "Class 5": { title: "Свято-Духов собор", history: "Главный православный храм Минска. Построен в 1633—1642 годах как костел бернардинок, выдающийся образец виленского барокко." }
         };
 
-        let model;
+        let model, maxPredictions;
         const videoElement = document.getElementById('webcam');
         const statusElement = document.getElementById('status');
 
@@ -58,7 +61,7 @@
         async function setupCamera() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: "environment" },
+                    video: { facingMode: "environment" }, // Задняя камера
                     audio: false
                 });
                 videoElement.srcObject = stream;
@@ -66,20 +69,21 @@
                     videoElement.onloadedmetadata = () => { resolve(videoElement); };
                 });
             } catch (e) {
-                statusElement.innerText = "Ошибка: Доступ к камере заблокирован настройками Android.";
+                statusElement.innerText = "Ошибка: Доступ к камере заблокирован настройками телефона.";
                 statusElement.style.color = "red";
                 throw e;
             }
         }
 
-        // Чистая загрузка графа слоев через TensorFlow.js
+        // Запуск загрузки через родной метод Teachable Machine на совместимых скриптах
         async function init() {
             try {
                 await setupCamera();
-                statusElement.innerText = "Камера запущена успешно. Загрузка нейросети ИИ...";
+                statusElement.innerText = "Камера подключена. Синхронизация с ИИ-моделью...";
                 
-                // Нативный метод загрузки слоев ИИ-модели по прямой ссылке
-                model = await tf.loadLayersModel(MODEL_URL);
+                // Загрузка модели по официальным правилам Google
+                model = await tmImage.load(URL + "model.json", URL + "metadata.json");
+                maxPredictions = model.getTotalClasses();
                 
                 statusElement.innerText = "Нейросеть успешно загружена! Наведите камеру на памятник.";
                 statusElement.style.color = "green";
@@ -100,32 +104,22 @@
         async function predict() {
             if (!model) return;
             
-            // Преобразование видеопотока в тензор формата 224x224 с нормализацией цвета под стандарты Teachable Machine
-            const logits = tf.tidy(() => {
-                const img = tf.browser.fromPixels(videoElement);
-                const resized = tf.image.resizeBilinear(img, [224, 224]);
-                const normalized = resized.div(tf.scalar(127.5)).sub(tf.scalar(1.0));
-                const batched = normalized.expandDims(0);
-                return model.predict(batched);
-            });
-
-            const preds = await logits.data();
-            logits.dispose(); // Принудительное очищение памяти устройства
+            // Распознавание кадра
+            const prediction = await model.predict(videoElement);
             
-            let bestIndex = -1;
+            let bestClass = "";
             let bestScore = 0;
-            
-            for (let i = 0; i < preds.length; i++) {
-                if (preds[i] > bestScore) {
-                    bestScore = preds[i];
-                    bestIndex = i;
+            for (let i = 0; i < maxPredictions; i++) {
+                if (prediction[i].probability > bestScore) {
+                    bestScore = prediction[i].probability;
+                    bestClass = prediction[i].className;
                 }
             }
 
-            // Вывод информации на экран при точности ИИ выше 70%
-            if (bestScore > 0.70 && CULTURE_DB[bestIndex]) {
-                document.getElementById("res-title").innerText = CULTURE_DB[bestIndex].title + ` (${(bestScore * 100).toFixed(0)}%)`;
-                document.getElementById("res-history").innerText = CULTURE_DB[bestIndex].history;
+            // Вывод информации при точности выше 75%
+            if (bestScore > 0.75 && CULTURE_DB[bestClass]) {
+                document.getElementById("res-title").innerText = CULTURE_DB[bestClass].title + ` (${(bestScore * 100).toFixed(0)}%)`;
+                document.getElementById("res-history").innerText = CULTURE_DB[bestClass].history;
                 document.getElementById("result-card").style.display = "block";
             }
         }
