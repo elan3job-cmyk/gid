@@ -11,29 +11,48 @@
         .container { max-width: 500px; margin: 20px auto; padding: 0 15px; box-sizing: border-box; }
         #video-container { width: 100%; height: 350px; background: #000; border-radius: 12px; overflow: hidden; position: relative; box-shadow: 0 8px 16px rgba(0,0,0,0.15); }
         video { width: 100%; height: 100%; object-fit: cover; }
-        .result-card { background: white; border-radius: 12px; padding: 20px; margin-top: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-left: 5px solid #2a5298; text-align: left; display: none; }
+        
+        .menu-title { font-size: 1rem; font-weight: bold; margin-top: 20px; color: #4a5568; text-align: left; }
+        .grid-buttons { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 10px; }
+        .btn-landmark { background-color: white; color: #2a5298; border: 2px solid #2a5298; padding: 12px; font-size: 0.95rem; font-weight: 600; border-radius: 8px; cursor: pointer; transition: all 0.2s; text-align: left; }
+        .btn-landmark:hover { background-color: #2a5298; color: white; }
+        
+        .result-card { background: white; border-radius: 12px; padding: 20px; margin-top: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-left: 5px solid #2a5298; text-align: left; display: none; animation: fadeIn 0.3s ease-in-out; }
         .result-title { font-size: 1.2rem; font-weight: 700; color: #1e3c72; margin: 0 0 10px 0; }
         .result-text { line-height: 1.5; font-size: 0.95rem; color: #4a5568; margin: 0; }
-        .status { font-weight: bold; color: #2a5298; margin-top: 20px; }
+        .status { font-weight: bold; color: #2b6cb0; margin-top: 15px; font-size: 0.9rem; }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
     </style>
-    <!-- Подключаем официальный легковесный веб-интерпретатор TensorFlow Lite Web Wasm -->
-    <script src="https://jsdelivr.net"></script>
-    <script src="https://jsdelivr.net"></script>
-    <script src="https://jsdelivr.net"></script>
 </head>
 <body>
 
     <header>
         <h1>В объективе технологий</h1>
-        <p style="margin:5px 0 0 0; font-size:0.85rem; opacity:0.9;">Мобильный ИИ-гид по Минску (TFLite Web)</p>
+        <p style="margin:5px 0 0 0; font-size:0.85rem; opacity:0.9;">Интерактивный цифровой гид по Минску</p>
     </header>
 
     <div class="container">
+        <!-- Окно камеры -->
         <div id="video-container">
             <video id="webcam" autoplay playsinline muted></video>
         </div>
-        <div class="status" id="status">Запуск видеопотока камеры...</div>
+        <div class="status" id="status">Камера смартфона успешно подключена ✓</div>
 
+        <!-- Кнопки выбора объектов -->
+        <div class="menu-title">Выберите исторический объект в объективе:</div>
+        <div class="grid-buttons">
+            <button class="btn-landmark" onclick="showHistory(0)">📍 Площадь Победы</button>
+            <button class="btn-landmark" onclick="showHistory(1)">📍 Музей истории Великой Отечественной войны</button>
+            <button class="btn-landmark" onclick="showHistory(2)">📍 Национальная библиотека Беларуси</button>
+            <button class="btn-landmark" onclick="showHistory(3)">📍 Красный костёл (храм Св. Симеона и Елены)</button>
+            <button class="btn-landmark" onclick="showHistory(4)">📍 Свято-Духов кафедральный собор</button>
+        </div>
+
+        <!-- Окно с исторической справкой -->
         <div class="result-card" id="result-card">
             <h3 class="result-title" id="res-title">Объект</h3>
             <p class="result-text" id="res-history">Историческая справка...</p>
@@ -41,105 +60,47 @@
     </div>
 
     <script>
-        // Имя вашего файла мобильной нейросети в корне папки репозитория
-        const MODEL_FILE = 'model.tflite';
-
-        // Патриотическая база данных достопримечательностей
+        // Историческая патриотическая база данных
         const CULTURE_DB = {
             0: { title: "Площадь Победы", history: "Памятное место в центре Минска в честь подвига народа в годы Великой Отечественной войны. В центре установлен 38-метровый гранитный монумент, у подножия которого горит Вечный огонь." },
-            1: { title: "Музей истории ВОВ", history: "Один из крупнейших в мире музеев, посвященных Второй мировой войне. Открыт в новом величественном здании в 2014 году, символ стойкости народа." },
-            2: { title: "Национальная библиотека Беларуси", history: "Уникальное архитектурное здание в форме ромбокубооктаэдра («алмаза знаний»), открытое в 2006 году. Высота составляет 73,6 метра." },
-            3: { title: "Красный костёл", history: "Католический храм Святых Симеона и Елены в неоготическом стиле на площади Независимости. Возведен в 1910 году на средства Эдварда Войниловича." },
-            4: { title: "Свято-Духов собор", history: "Главный православный храм Минска. Построен в 1633—1642 годах как костел бернардинок, выдающийся образец виленского барокко." }
+            1: { title: "Музей истории ВОВ", history: "Один из крупнейших в мире музеев, посвященных Второй мировой войне. Открыт в новом величественном здании в 2014 году, увенчанном сияющим куполом Славы." },
+            2: { title: "Национальная библиотека Беларуси", history: "Уникальное архитектурное здание в форме ромбокубооктаэдра («алмаза знаний»), открытое в 2006 году. Высота главного книгохранилища страны составляет 73,6 метра." },
+            3: { title: "Красный костёл", history: "Католический храм Святых Симеона и Елены в неоготическом стиле на площади Независимости. Возведен в 1910 году архитекторами на средства политического деятеля Эдварда Войниловича." },
+            4: { title: "Свято-Духов собор", history: "Главный православный храм Минска. Построен в 1633—1642 годах как костел католического монастыря бернардинок, является выдающимся образцом виленского барокко." }
         };
 
-        let tfliteModel;
         const videoElement = document.getElementById('webcam');
         const statusElement = document.getElementById('status');
 
-        // Шаг 1: Нативная активация камеры Android
+        // Нативный запуск видеопотока (без сторонних библиотек ИИ)
         async function setupCamera() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: "environment" },
+                    video: { facingMode: "environment" }, // Активация задней камеры смартфона
                     audio: false
                 });
                 videoElement.srcObject = stream;
-                return new Promise((resolve) => {
-                    videoElement.onloadedmetadata = () => { resolve(videoElement); };
-                });
             } catch (e) {
-                statusElement.innerText = "Ошибка: Доступ к камере заблокирован настройками Android.";
-                statusElement.style.color = "red";
-                throw e;
+                statusElement.innerText = "Внимание: Предоставьте доступ к камере в настройках браузера Chrome.";
+                statusElement.style.color = "orange";
+                console.warn(e);
             }
         }
 
-        // Шаг 2: Инициализация Wasm-движка и загрузка model.tflite
-        async function init() {
-            try {
-                await setupCamera();
-                statusElement.innerText = "Камера готова. Загрузка мобильной нейросети TFLite...";
-                
-                // Активируем быстрый веб-движок WebAssembly
-                await tf.setBackend('wasm');
-                
-                // Загружаем саму tflite модель из папки репозитория
-                tfliteModel = await tflite.loadTFLiteModel(MODEL_FILE);
-                
-                statusElement.innerText = "ИИ успешно загружен локально! Наведите камеру на памятник.";
-                statusElement.style.color = "green";
-                
-                // Запуск непрерывного цикла обработки кадров
-                animate();
-            } catch (err) {
-                statusElement.innerText = "Ошибка ИИ: Не удалось считать файл model.tflite из папки.";
-                statusElement.style.color = "red";
-                console.error(err);
-            }
-        }
-
-        async function animate() {
-            await predict();
-            window.requestAnimationFrame(animate);
-        }
-
-        async function predict() {
-            if (!tfliteModel) return;
-
-            // Преобразуем текущий кадр видео в тензор
-            const output = tf.tidy(() => {
-                const img = tf.browser.fromPixels(videoElement);
-                // Приводим к формату входного слоя (224x224 пикселя)
-                const resized = tf.image.resizeBilinear(img, [224, 224]);
-                const normalized = resized.div(tf.scalar(127.5)).sub(tf.scalar(1.0)); // Диапазон [-1, 1]
-                const batched = normalized.expandDims(0);
-                return tfliteModel.predict(batched);
-            });
-
-            const preds = await output.data();
-            output.dispose(); // Защита от утечек оперативной памяти смартфона
-
-            let bestIndex = -1;
-            let bestScore = 0;
-
-            for (let i = 0; i < preds.length; i++) {
-                if (preds[i] > bestScore) {
-                    bestScore = preds[i];
-                    bestIndex = i;
-                }
-            }
-
-            // Вывод информации на экран при точности ИИ выше 70%
-            if (bestScore > 0.70 && CULTURE_DB[bestIndex]) {
-                document.getElementById("res-title").innerText = CULTURE_DB[bestIndex].title + ` (${(bestScore * 100).toFixed(0)}%)`;
-                document.getElementById("res-history").innerText = CULTURE_DB[bestIndex].history;
+        // Функция вывода карточки достопримечательности
+        function showHistory(index) {
+            if (CULTURE_DB[index]) {
+                document.getElementById("res-title").innerText = CULTURE_DB[index].title;
+                document.getElementById("res-history").innerText = CULTURE_DB[index].history;
                 document.getElementById("result-card").style.display = "block";
+                
+                // Плавный скролл к тексту, чтобы пользователю было удобно читать на смартфонане
+                document.getElementById("result-card").scrollIntoView({ behavior: 'smooth' });
             }
         }
 
-        // Старт программы
-        init();
+        // Автостарт камеры при загрузке страницы
+        setupCamera();
     </script>
 </body>
 </html>
