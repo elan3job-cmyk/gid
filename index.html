@@ -1,106 +1,20 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>В объективе технологий — Минск</title>
     <style>
-        body {
-            font-family: system-ui, -apple-system, sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: #f5f7fa;
-            text-align: center;
-            color: #333;
-        }
-
-        header {
-            background: linear-gradient(135deg, #1e3c72, #2a5298);
-            color: white;
-            padding: 20px 0;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-
-        h1 {
-            margin: 0;
-            font-size: 1.4rem;
-        }
-
-        p {
-            margin: 5px 0 0 0;
-            font-size: 0.85rem;
-            opacity: 0.9;
-        }
-
-        .container {
-            max-width: 500px;
-            margin: 20px auto;
-            padding: 0 15px;
-            box-sizing: border-box;
-        }
-
-        #webcam-container {
-            width: 100%;
-            height: 350px;
-            background: #000;
-            border-radius: 12px;
-            overflow: hidden;
-            position: relative;
-            box-shadow: 0 8px 16px rgba(0,0,0,0.15);
-        }
-
-        video, canvas {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        .result-card {
-            background: white;
-            border-radius: 12px;
-            padding: 20px;
-            margin-top: 20px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-            border-left: 5px solid #2a5298;
-            text-align: left;
-            display: none;
-        }
-
-        .result-title {
-            font-size: 1.2rem;
-            font-weight: 700;
-            color: #1e3c72;
-            margin: 0 0 10px 0;
-        }
-
-        .result-text {
-            line-height: 1.5;
-            font-size: 0.95rem;
-            color: #4a5568;
-            margin: 0;
-        }
-
-        .loader {
-            font-weight: bold;
-            color: #2a5298;
-            margin-top: 20px;
-        }
-
-        .bar-container {
-            margin-top: 15px;
-            background: #e2e8f0;
-            border-radius: 8px;
-            height: 10px;
-            overflow: hidden;
-            display: none;
-        }
-
-        .bar {
-            background: #2a5298;
-            height: 100%;
-            width: 0%;
-            transition: width 0.1s;
-        }
+        body { font-family: system-ui, sans-serif; margin: 0; padding: 0; background-color: #f5f7fa; text-align: center; color: #333; }
+        header { background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; padding: 20px 0; }
+        h1 { margin: 0; font-size: 1.4rem; }
+        .container { max-width: 500px; margin: 20px auto; padding: 0 15px; box-sizing: border-box; }
+        #video-container { width: 100%; height: 350px; background: #000; border-radius: 12px; overflow: hidden; position: relative; }
+        video { width: 100%; height: 100%; object-fit: cover; }
+        .result-card { background: white; border-radius: 12px; padding: 20px; margin-top: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-left: 5px solid #2a5298; text-align: left; display: none; }
+        .result-title { font-size: 1.2rem; font-weight: 700; color: #1e3c72; margin: 0 0 10px 0; }
+        .result-text { line-height: 1.5; font-size: 0.95rem; color: #4a5568; margin: 0; }
+        .status { font-weight: bold; color: #2a5298; margin-top: 20px; }
     </style>
     <!-- Подключаем ИИ-скрипты Google напрямую -->
     <script src="https://jsdelivr.net"></script>
@@ -110,17 +24,16 @@
 
     <header>
         <h1>В объективе технологий</h1>
-        <p>Интеллектуальный нейросетевой гид по Минску</p>
+        <p style="margin:5px 0 0 0; font-size:0.85rem; opacity:0.9;">Нейросетевой ИИ-гид по Минску</p>
     </header>
 
     <div class="container">
-        <!-- Окно камеры -->
-        <div id="webcam-container"></div>
-        <div class="loader" id="status">Инициализация камеры и загрузка ИИ...</div>
+        <div id="video-container">
+            <!-- Стандартный тег видео для железной активации камеры на Android -->
+            <video id="webcam" autoplay playsinline muted></video>
+        </div>
+        <div class="status" id="status">Запрос доступа к камере телефона...</div>
 
-        <div class="bar-container" id="bar-container"><div class="bar" id="predict-bar"></div></div>
-
-        <!-- Красивое окно с исторической справкой -->
         <div class="result-card" id="result-card">
             <h3 class="result-title" id="res-title">Объект</h3>
             <p class="result-text" id="res-history">Историческая справка...</p>
@@ -128,74 +41,72 @@
     </div>
 
     <script>
-        // Ссылка на ВАШУ готовую модель ИИ в облаке Google
-        const URL = "./";
+        // Ваша рабочая ссылка на модель в облаке Google Teachable Machine
+        const URL = "https://withgoogle.com";
 
-        // Историческая патриотическая база данных Минска
-        // ВНИМАНИЕ: Названия ("Class 1", "Class 2") должны строго совпадать с тем, как они написаны у вас на Teachable Machine!
         const CULTURE_DB = {
-            "Class 1": {
-                title: "Площадь Победы",
-                history: "Памятное место в центре Минска в честь подвига народа в годы Великой Отечественной войны. В центре установлен 38-метровый гранитный монумент, у подножия которого горит Вечный огонь."
-            },
-            "Class 2": {
-                title: "Музей истории ВОВ",
-                history: "Один из крупнейших в мире музеев, посвященных Второй мировой войне. Открыт в новом величественном здании в 2014 году, символ стойкости народа."
-            },
-            "Class 3": {
-                title: "Национальная библиотека Беларуси",
-                history: "Уникальное архитектурное здание в форме ромбокубооктаэдра («алмаза знаний»), открытое в 2006 году. Высота составляет 73,6 метра."
-            },
-            "Class 4": {
-                title: "Красный костёл",
-                history: "Католический храм Святых Симеона и Елены в неоготическом стиле на площади Независимости. Возведен в 1910 году на средства Эдварда Войниловича."
-            },
-            "Class 5": {
-                title: "Свято-Духов собор",
-                history: "Главный православный храм Минска. Построен в 1633—1642 годах как костел бернардинок, выдающийся образец виленского барокко."
-            }
+            "Class 1": { title: "Площадь Победы", history: "Памятное место в центре Минска в честь подвига народа в годы Великой Отечественной войны. В центре установлен 38-метровый гранитный монумент, у подножия которого горит Вечный огонь." },
+            "Class 2": { title: "Музей истории ВОВ", history: "Один из крупнейших в мире музеев, посвященных Второй мировой войне. Открыт в новом величественном здании в 2014 году, символ стойкости народа." },
+            "Class 3": { title: "Национальная библиотека Беларуси", history: "Уникальное архитектурное здание в форме ромбокубооктаэдра («алмаза знаний»), открытое в 2006 году. Высота составляет 73,6 метра." },
+            "Class 4": { title: "Красный костёл", history: "Католический храм Святых Симеона и Елены в неоготическом стиле на площади Независимости. Возведен в 1910 году на средства Эдварда Войниловича." },
+            "Class 5": { title: "Свято-Духов собор", history: "Главный православный храм Минска. Построен в 1633—1642 годах как костел бернардинок, выдающийся образец виленского барокко." }
         };
 
-        let model, webcam, maxPredictions;
+        let model, maxPredictions;
+        const videoElement = document.getElementById('webcam');
+        const statusElement = document.getElementById('status');
 
-        async function init() {
-            const modelURL = URL + "model.json";
-            const metadataURL = URL + "metadata.json";
-
+        // Шаг 1: Принудительный запуск камеры через нативный API браузера Android
+        async function setupCamera() {
             try {
-                // Загружаем ИИ-модель прямо в браузер устройства
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: "environment" }, // Задняя камера
+                    audio: false
+                });
+                videoElement.srcObject = stream;
+                return new Promise((resolve) => {
+                    videoElement.onloadedmetadata = () => {
+                        resolve(videoElement);
+                    };
+                });
+            } catch (e) {
+                statusElement.innerText = "Ошибка: Доступ к камере заблокирован смартфоном.";
+                statusElement.style.color = "red";
+                throw e;
+            }
+        }
+
+        // Шаг 2: Загрузка нейросети и старт распознавания
+        async function init() {
+            try {
+                await setupCamera();
+                statusElement.innerText = "Камера подключена. Загрузка нейросети ИИ...";
+                
+                const modelURL = URL + "model.json";
+                const metadataURL = URL + "metadata.json";
+                
                 model = await tmImage.load(modelURL, metadataURL);
                 maxPredictions = model.getTotalClasses();
-
-                // Настройка камеры мобильного телефона (environment — задняя камера)
-                const flip = false;
-                webcam = new tmImage.Webcam(350, 350, flip);
-                await webcam.setup({ facingMode: "environment" });
-                await webcam.play();
-
-                // Скрываем надпись загрузки и выводим видеопоток
-                document.getElementById("status").style.display = "none";
-                document.getElementById("bar-container").style.display = "block";
-                document.getElementById("webcam-container").appendChild(webcam.canvas);
-
-                // Запуск непрерывного цикла распознавания кадров
+                
+                statusElement.innerText = "ИИ готов! Наведите камеру на объект.";
+                statusElement.style.color = "green";
+                
+                // Запуск цикла распознавания
                 window.requestAnimationFrame(loop);
-            } catch (e) {
-                document.getElementById("status").innerText = "Ошибка доступа к камере. Откройте сайт через HTTPS в Chrome!";
-                console.error(e);
+            } catch (err) {
+                console.error("Ошибка инициализации:", err);
             }
         }
 
         async function loop() {
-            webcam.update();
             await predict();
             window.requestAnimationFrame(loop);
         }
 
         async function predict() {
-            const prediction = await model.predict(webcam.canvas);
-
-            // Ищем класс с максимальной уверенностью нейросети
+            // Передаем нативный видеопоток напрямую в модель
+            const prediction = await model.predict(videoElement);
+            
             let bestClass = "";
             let bestScore = 0;
             for (let i = 0; i < maxPredictions; i++) {
@@ -205,10 +116,6 @@
                 }
             }
 
-            // Визуализируем точность в виде полоски
-            document.getElementById("predict-bar").style.width = (bestScore * 100) + "%";
-
-            // Если уверенность ИИ выше 75%, выводим карточку с историей из базы
             if (bestScore > 0.75 && CULTURE_DB[bestClass]) {
                 document.getElementById("res-title").innerText = CULTURE_DB[bestClass].title + ` (${(bestScore * 100).toFixed(0)}%)`;
                 document.getElementById("res-history").innerText = CULTURE_DB[bestClass].history;
@@ -216,8 +123,9 @@
             }
         }
 
-        // Запуск
+        // Старт программы
         init();
     </script>
 </body>
 </html>
+﻿
