@@ -9,16 +9,16 @@
         header { background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; padding: 20px 0; }
         h1 { margin: 0; font-size: 1.4rem; }
         .container { max-width: 500px; margin: 20px auto; padding: 0 15px; box-sizing: border-box; }
-        #video-container { width: 100%; height: 350px; background: #000; border-radius: 12px; overflow: hidden; position: relative; }
+        #canvas-container { width: 100%; height: 350px; background: #000; border-radius: 12px; overflow: hidden; position: relative; display: flex; justify: center; align-items: center; }
         video { width: 100%; height: 100%; object-fit: cover; }
         .result-card { background: white; border-radius: 12px; padding: 20px; margin-top: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-left: 5px solid #2a5298; text-align: left; display: none; }
         .result-title { font-size: 1.2rem; font-weight: 700; color: #1e3c72; margin: 0 0 10px 0; }
         .result-text { line-height: 1.5; font-size: 0.95rem; color: #4a5568; margin: 0; }
         .status { font-weight: bold; color: #2a5298; margin-top: 20px; }
     </style>
-    <!-- Подключаем официальные библиотеки ИИ от Google -->
-    <script src="https://jsdelivr.net"></script>
-    <script src="https://jsdelivr.net"></script>
+    <!-- Подключаем сверхстабильные библиотеки p5.js и ml5.js для работы ИИ -->
+    <script src="https://cloudflare.com"></script>
+    <script src="https://unpkg.com"></script>
 </head>
 <body>
 
@@ -28,10 +28,9 @@
     </header>
 
     <div class="container">
-        <div id="video-container">
-            <video id="webcam" autoplay playsinline muted></video>
-        </div>
-        <div class="status" id="status">Запрос доступа к камере телефона...</div>
+        <!-- Сюда скрипт автоматически вставит видеопоток -->
+        <div id="canvas-container"></div>
+        <div class="status" id="status">Запуск камеры и ИИ-компонентов...</div>
 
         <div class="result-card" id="result-card">
             <h3 class="result-title" id="res-title">Объект</h3>
@@ -40,7 +39,9 @@
     </div>
 
     <script>
-        // База данных Минска. Имена (Class 1, Class 2...) должны строго совпадать с классами в вашем metadata.json
+        // Ваша прямая облачная ссылка на модель — ml5.js сам заберет файлы без конфликтов Keras и CORS
+        const modelURL = 'https://withgoogle.com';
+
         const CULTURE_DB = {
             "Class 1": { title: "Площадь Победы", history: "Памятное место в центре Минска в честь подвига народа в годы Великой Отечественной войны. В центре установлен 38-метровый гранитный монумент, у подножия которого горит Вечный огонь." },
             "Class 2": { title: "Музей истории ВОВ", history: "Один из крупнейших в мире музеев, посвященных Второй мировой войне. Открыт в новом величественном здании в 2014 году, символ стойкости народа." },
@@ -49,78 +50,78 @@
             "Class 5": { title: "Свято-Духов собор", history: "Главный православный храм Минска. Построен в 1633—1642 годах как костел бернардинок, выдающийся образец виленского барокко." }
         };
 
-        let model, maxPredictions;
-        const videoElement = document.getElementById('webcam');
-        const statusElement = document.getElementById('status');
+        let classifier;
+        let video;
 
-        // Шаг 1: Активация камеры смартфона
-        async function setupCamera() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: "environment" },
-                    audio: false
-                });
-                videoElement.srcObject = stream;
-                return new Promise((resolve) => {
-                    videoElement.onloadedmetadata = () => { resolve(videoElement); };
-                });
-            } catch (e) {
-                statusElement.innerText = "Ошибка: Камера заблокирована. Дайте разрешение в Chrome!";
-                statusElement.style.color = "red";
-                throw e;
-            }
-        }
-
-        // Шаг 2: Загрузка модели через прямые Raw-ссылки вашего репозитория для обхода CORS
-        async function init() {
-            try {
-                await setupCamera();
-                statusElement.innerText = "Камера готова. Авторизация ИИ-компонентов...";
-                
-                // ИСПОЛЬЗУЕМ ПРЯМЫЕ ССЫЛКИ НА ВАШ РЕПОЗИТОРИЙ GID ДЛЯ СНЯТИЯ БЛОКИРОВОК GITHUB
-                const modelJsonURL = "https://githubusercontent.com";
-                const metadataJsonURL = "https://githubusercontent.com";
-                
-                model = await tmImage.load(modelJsonURL, metadataJsonURL);
-                maxPredictions = model.getTotalClasses();
-                
-                statusElement.innerText = "ИИ успешно загружен! Наведите камеру на объект.";
-                statusElement.style.color = "green";
-                
-                window.requestAnimationFrame(loop);
-            } catch (err) {
-                statusElement.innerText = "Ошибка десериализации. Проверьте файлы репозитория.";
-                statusElement.style.color = "red";
-                console.error(err);
-            }
-        }
-
-        async function loop() {
-            await predict();
-            window.requestAnimationFrame(loop);
-        }
-
-        async function predict() {
-            if (!model) return;
-            const prediction = await model.predict(videoElement);
+        function setup() {
+            // Создаем холст под размер контейнера и прячем его дефолтный вывод
+            let canvas = createCanvas(350, 350);
+            canvas.parent('canvas-container');
             
-            let bestClass = "";
-            let bestScore = 0;
-            for (let i = 0; i < maxPredictions; i++) {
-                if (prediction[i].probability > bestScore) {
-                    bestScore = prediction[i].probability;
-                    bestClass = prediction[i].className;
-                }
-            }
+            // Запуск камеры смартфона (задняя камера environment)
+            let options = {
+                video: { facingMode: { exact: "environment" } },
+                audio: false
+            };
+            
+            // Если на ПК нет задней камеры, плавно переключаемся на дефолтную
+            video = createCapture(VIDEO, options, function(stream) {
+                console.log("Камера запущена");
+            });
+            
+            // На случай если на ПК facingMode: environment выдаст ошибку, делаем резервный запуск
+            video.catch(err => {
+                video = createCapture(VIDEO);
+                video.size(350, 350);
+                video.hide();
+            });
+            
+            video.size(350, 350);
+            video.hide();
 
+            // Инициализация классификатора изображений через облачный адрес
+            document.getElementById('status').innerText = "Камера готова. Загрузка нейросети...";
+            classifier = ml5.imageClassifier(modelURL + 'model.json', video, modelReady);
+        }
+
+        function draw() {
+            // Отрисовка кадра видео на холст
+            image(video, 0, 0, 350, 350);
+        }
+
+        function modelReady() {
+            let status = document.getElementById('status');
+            status.innerText = "ИИ успешно загружен! Наведите камеру на объект.";
+            status.style.color = "green";
+            // Запуск бесконечного распознавания
+            classifyVideo();
+        }
+
+        function classifyVideo() {
+            classifier.classify(gotResult);
+        }
+
+        function gotResult(error, results) {
+            if (error) {
+                console.error(error);
+                return;
+            }
+            
+            // Получаем объект с максимальной точностью
+            let bestResult = results[0];
+            let bestClass = bestResult.label;
+            let bestScore = bestResult.confidence;
+
+            // Если точность ИИ выше 75%
             if (bestScore > 0.75 && CULTURE_DB[bestClass]) {
                 document.getElementById("res-title").innerText = CULTURE_DB[bestClass].title + ` (${(bestScore * 100).toFixed(0)}%)`;
                 document.getElementById("res-history").innerText = CULTURE_DB[bestClass].history;
                 document.getElementById("result-card").style.display = "block";
             }
+            
+            // Рекурсивный вызов для следующего кадра
+            classifyVideo();
         }
-
-        init();
     </script>
 </body>
 </html>
