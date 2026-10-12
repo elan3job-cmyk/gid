@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>В объективе технологий — Минск</title>
+    <style>
+        body { font-family: system-ui, sans-serif; margin: 0; padding: 0; background-color: #f5f7fa; text-align: center; color: #333; }
+        header { background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; padding: 20px 0; }
+        h1 { margin: 0; font-size: 1.4rem; }
+        .container { max-width: 500px; margin: 20px auto; padding: 0 15px; box-sizing: border-box; }
+        #video-container { width: 100%; height: 350px; background: #000; border-radius: 12px; overflow: hidden; position: relative; }
+        video { width: 100%; height: 100%; object-fit: cover; }
+        .result-card { background: white; border-radius: 12px; padding: 20px; margin-top: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-left: 5px solid #2a5298; text-align: left; display: none; }
+        .result-title { font-size: 1.2rem; font-weight: 700; color: #1e3c72; margin: 0 0 10px 0; }
+        .result-text { line-height: 1.5; font-size: 0.95rem; color: #4a5568; margin: 0; }
+        .status { font-weight: bold; color: #2a5298; margin-top: 20px; }
+    </style>
+    <!-- Подключаем только базовое ядро TensorFlow.js без библиотек TeachableMachine -->
+    <script src="https://jsdelivr.net"></script>
+</head>
+<body>
+
+    <header>
+        <h1>В объективе технологий</h1>
+        <p style="margin:5px 0 0 0; font-size:0.85rem; opacity:0.9;">Нейросетевой ИИ-гид по Минску</p>
+    </header>
+
+    <div class="container">
+        <div id="video-container">
+            <video id="webcam" autoplay playsinline muted></video>
+        </div>
+        <div class="status" id="status">Запрос доступа к камере телефона...</div>
+
+        <div class="result-card" id="result-card">
+            <h3 class="result-title" id="res-title">Объект</h3>
+            <p class="result-text" id="res-history">Историческая справка...</p>
+        </div>
+    </div>
+
+    <script>
+        // ЧИТАЕМ ФАЙЛЫ НАПРЯМУЮ ИЗ ВАШЕЙ ЖЕ ПАПКИ ГИТХАБА (БЕЗ ВНЕШНИХ ССЫЛОК)
+        const MODEL_URL = "./model.json";
+
+        const CULTURE_DB = {
+            0: { title: "Площадь Победы", history: "Памятное место в центре Минска в честь подвига народа в годы Великой Отечественной войны. В центре установлен 38-метровый гранитный монумент, у подножия которого горит Вечный огонь." },
+            1: { title: "Музей истории ВОВ", history: "Один из крупнейших в мире музеев, посвященных Второй мировой войне. Открыт в новом величественном здании в 2014 году, символ стойкости народа." },
+            2: { title: "Национальная библиотека Беларуси", history: "Уникальное архитектурное здание в форме ромбокубооктаэдра («алмаза знаний»), открытое в 2006 году. Высота составляет 73,6 метра." },
+            3: { title: "Красный костёл", history: "Католический храм Святых Симеона и Елены в неоготическом стиле на площади Независимости. Возведен в 1910 году на средства Эдварда Войниловича." },
+            4: { title: "Свято-Духов собор", history: "Главный православный храм Минска. Построен в 1633—1642 годах как костел бернардинок, выдающийся образец виленского барокко." }
+        };
+
+        let model;
+        const videoElement = document.getElementById('webcam');
+        const statusElement = document.getElementById('status');
+
+        async function setupCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: "environment" },
+                    audio: false
+                });
+                videoElement.srcObject = stream;
+                return new Promise((resolve) => {
+                    videoElement.onloadedmetadata = () => { resolve(videoElement); };
+                });
+            } catch (e) {
+                statusElement.innerText = "Ошибка: Доступ к камере заблокирован смартфоном.";
+                statusElement.style.color = "red";
+                throw e;
+            }
+        }
+
+        async function init() {
+            try {
+                await setupCamera();
+                statusElement.innerText = "Камера подключена. Загрузка локальных файлов ИИ из папки репозитория...";
+                
+                // Нативная загрузка слоя модели напрямую с вашего сервера GitHub Pages
+                model = await tf.loadLayersModel(MODEL_URL);
+                
+                statusElement.innerText = "ИИ готов! Наведите камеру на объект.";
+                statusElement.style.color = "green";
+                
+                window.requestAnimationFrame(loop);
+            } catch (err) {
+                statusElement.innerText = "Ошибка чтения локальных файлов модели на GitHub. Проверьте, лежат ли файлы model.json и weights.bin в этой же папке.";
+                statusElement.style.color = "red";
+                console.error("Ошибка инициализации:", err);
+            }
+        }
+
+        async function loop() {
+            await predict();
+            window.requestAnimationFrame(loop);
+        }
+
+        async function predict() {
+            if (!model) return;
+            
+            // Превращаем кадр видеопотока в тензор и подгоняем под размер ИИ (224x224) средствами TensorFlow.js
+            const logits = tf.tidy(() => {
+                const img = tf.browser.fromPixels(videoElement);
+                const resized = tf.image.resizeBilinear(img, [224, 224]);
+                const normalized = resized.div(tf.scalar(127.5)).sub(tf.scalar(1.0)); // Нормализация [-1, 1]
+                const batched = normalized.expandDims(0);
+                return model.predict(batched);
+            });
+
+            const preds = await logits.data();
+            logits.dispose(); // Очищаем оперативную память телефона от тензора
+            
+            let bestIndex = -1;
+            let bestScore = 0;
+            
+            for (let i = 0; i < preds.length; i++) {
+                if (preds[i] > bestScore) {
+                    bestScore = preds[i];
+                    bestIndex = i;
+                }
+            }
+
+            // Если уверенность ИИ выше 75%
+            if (bestScore > 0.75 && CULTURE_DB[bestIndex]) {
+                document.getElementById("res-title").innerText = CULTURE_DB[bestIndex].title + ` (${(bestScore * 100).toFixed(0)}%)`;
+                document.getElementById("res-history").innerText = CULTURE_DB[bestIndex].history;
+                document.getElementById("result-card").style.display = "block";
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
