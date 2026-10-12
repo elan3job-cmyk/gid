@@ -9,15 +9,14 @@
         header { background: linear-gradient(135deg, #1e3c72, #2a5298); color: white; padding: 20px 0; }
         h1 { margin: 0; font-size: 1.4rem; }
         .container { max-width: 500px; margin: 20px auto; padding: 0 15px; box-sizing: border-box; }
-        #canvas-container { width: 100%; height: 350px; background: #000; border-radius: 12px; overflow: hidden; display: flex; justify-content: center; align-items: center; box-shadow: 0 8px 16px rgba(0,0,0,0.15); }
-        canvas { width: 100% !important; height: 100% !important; object-fit: cover; }
+        #video-container { width: 100%; height: 350px; background: #000; border-radius: 12px; overflow: hidden; position: relative; box-shadow: 0 8px 16px rgba(0,0,0,0.15); }
+        video { width: 100%; height: 100%; object-fit: cover; }
         .result-card { background: white; border-radius: 12px; padding: 20px; margin-top: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-left: 5px solid #2a5298; text-align: left; display: none; }
         .result-title { font-size: 1.2rem; font-weight: 700; color: #1e3c72; margin: 0 0 10px 0; }
         .result-text { line-height: 1.5; font-size: 0.95rem; color: #4a5568; margin: 0; }
         .status { font-weight: bold; color: #2a5298; margin-top: 20px; }
     </style>
-    <!-- Подключаем стабильные библиотеки ИИ -->
-    <script src="https://cloudflare.com"></script>
+    <!-- Подключаем только ml5.js для стабильной обработки ИИ без тяжелой p5.js -->
     <script src="https://unpkg.com"></script>
 </head>
 <body>
@@ -28,8 +27,11 @@
     </header>
 
     <div class="container">
-        <div id="canvas-container"></div>
-        <div class="status" id="status">Активация видеопотока и ИИ...</div>
+        <div id="video-container">
+            <!-- Нативный тег видео для железной активации камеры на Android -->
+            <video id="webcam" autoplay playsinline muted></video>
+        </div>
+        <div class="status" id="status">Запуск видеопотока камеры...</div>
 
         <div class="result-card" id="result-card">
             <h3 class="result-title" id="res-title">Объект</h3>
@@ -38,7 +40,7 @@
     </div>
 
     <script>
-        // Облачная ссылка на вашу рабочую модель
+        // Облачная ссылка на вашу рабочую модель Teachable Machine
         const modelURL = 'https://withgoogle.com';
 
         const CULTURE_DB = {
@@ -50,58 +52,53 @@
         };
 
         let classifier;
-        let video;
-        let isModelLoading = false;
+        const videoElement = document.getElementById('webcam');
+        const statusElement = document.getElementById('status');
 
-        function setup() {
-            let canvas = createCanvas(350, 350);
-            canvas.parent('canvas-container');
-            
-            // МЯГКАЯ НАСТРОЙКА КАМЕРЫ: приоритет на заднюю (environment), но без жесткого требования exact
-            let constraints = {
-                video: {
-                    facingMode: "environment"
-                },
-                audio: false
-            };
-            
-            // Запуск видеопотока
-            video = createCapture(constraints, function(stream) {
-                console.log("Видеопоток успешно инициализирован.");
-                startClassifier(); // Запускаем загрузку ИИ только после того, как камера завелась
-            });
-            
-            video.size(350, 350);
-            video.hide();
-        }
-
-        function draw() {
-            // Отрисовка кадра на экране
-            if (video) {
-                image(video, 0, 0, 350, 350);
+        // Шаг 1: Гарантированный нативный запуск видеопотока через браузер Android
+        async function setupCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: "environment" }, // Задняя камера смартфона
+                    audio: false
+                });
+                videoElement.srcObject = stream;
+                return new Promise((resolve) => {
+                    videoElement.onloadedmetadata = () => {
+                        resolve(videoElement);
+                    };
+                });
+            } catch (e) {
+                statusElement.innerText = "Ошибка: Доступ к камере заблокирован смартфоном.";
+                statusElement.style.color = "red";
+                throw e;
             }
         }
 
-        function startClassifier() {
-            if (isModelLoading) return;
-            isModelLoading = true;
-            
-            document.getElementById('status').innerText = "Камера подключена. Интеграция с ИИ-моделью...";
-            
-            // Загрузка классификатора ml5
-            classifier = ml5.imageClassifier(modelURL + 'model.json', video, modelReady);
-        }
-
-        function modelReady() {
-            let status = document.getElementById('status');
-            status.innerText = "ИИ успешно загружен! Наведите камеру на объект.";
-            status.style.color = "green";
-            classifyVideo();
+        // Шаг 2: Инициализация ИИ-модели через ml5.js
+        async function init() {
+            try {
+                await setupCamera();
+                statusElement.innerText = "Камера подключена. Интеграция с ИИ-моделью...";
+                
+                // Загружаем классификатор ml5 без p5-зависимостей
+                classifier = await ml5.imageClassifier(modelURL + 'model.json', videoElement);
+                
+                statusElement.innerText = "ИИ успешно загружен! Наведите камеру на объект.";
+                statusElement.style.color = "green";
+                
+                // Запускаем непрерывный цикл распознавания кадров
+                classifyVideo();
+            } catch (err) {
+                statusElement.innerText = "Ошибка загрузки модели. Проверьте соединение.";
+                statusElement.style.color = "red";
+                console.error(err);
+            }
         }
 
         function classifyVideo() {
-            if (classifier && video) {
-                classifier.classify(gotResult);
+            if (classifier) {
+                classifier.classify(videoElement, gotResult);
             }
         }
 
@@ -112,19 +109,24 @@
             }
             
             if (results && results.length > 0) {
-                let bestResult = results[0];
+                let bestResult = results[0]; // Элемент с наивысшей уверенностью ИИ
                 let bestClass = bestResult.label;
                 let bestScore = bestResult.confidence;
 
-                if (bestScore > 0.70 && CULTURE_DB[bestClass]) {
+                // Если точность ИИ выше 75%, выводим карточку с историей
+                if (bestScore > 0.75 && CULTURE_DB[bestClass]) {
                     document.getElementById("res-title").innerText = CULTURE_DB[bestClass].title + ` (${(bestScore * 100).toFixed(0)}%)`;
                     document.getElementById("res-history").innerText = CULTURE_DB[bestClass].history;
                     document.getElementById("result-card").style.display = "block";
                 }
             }
             
-            // Циклический вызов следующего кадра
+            // Запрос на обработку следующего кадра видеопотока
             classifyVideo();
         }
+
+        // Старт системы
+        init();
     </script>
 </body>
+</html>
