@@ -16,7 +16,7 @@
         .result-text { line-height: 1.5; font-size: 0.95rem; color: #4a5568; margin: 0; }
         .status { font-weight: bold; color: #2a5298; margin-top: 20px; }
     </style>
-    <!-- Подключаем только ml5.js для стабильной обработки ИИ без тяжелой p5.js -->
+    <!-- Подключаем стабильное ядро ИИ ml5.js -->
     <script src="https://unpkg.com"></script>
 </head>
 <body>
@@ -28,7 +28,6 @@
 
     <div class="container">
         <div id="video-container">
-            <!-- Нативный тег видео для железной активации камеры на Android -->
             <video id="webcam" autoplay playsinline muted></video>
         </div>
         <div class="status" id="status">Запуск видеопотока камеры...</div>
@@ -40,57 +39,57 @@
     </div>
 
     <script>
-        // Облачная ссылка на вашу рабочую модель Teachable Machine
-        const modelURL = 'https://withgoogle.com';
+        // ИСПОЛЬЗУЕМ ЧИСТЫЙ ЛОКАЛЬНЫЙ АДРЕС. ИИ БЕРЕТ ФАЙЛЫ ИЗ ВАШЕЙ ПАПКИ НА ГИТХАБЕ
+        const MODEL_PATH = 'model.json';
 
+        // База данных патриотического контента Минска
+        // ВАЖНО: Номера 0, 1, 2... строго соответствуют порядку ваших папок в Teachable Machine
         const CULTURE_DB = {
-            "Class 1": { title: "Площадь Победы", history: "Памятное место в центре Минска в честь подвига народа в годы Великой Отечественной войны. В центре установлен 38-метровый гранитный монумент, у подножия которого горит Вечный огонь." },
-            "Class 2": { title: "Музей истории ВОВ", history: "Один из крупнейших в мире музеев, посвященных Второй мировой войне. Открыт в новом величественном здании в 2014 году, символ стойкости народа." },
-            "Class 3": { title: "Национальная библиотека Беларуси", history: "Уникальное архитектурное здание в форме ромбокубооктаэдра («алмаза знаний»), открытое в 2006 году. Высота составляет 73,6 метра." },
-            "Class 4": { title: "Красный костёл", history: "Католический храм Святых Симеона и Елены в неоготическом стиле на площади Независимости. Возведен в 1910 году на средства Эдварда Войниловича." },
-            "Class 5": { title: "Свято-Духов собор", history: "Главный православный храм Минска. Построен в 1633—1642 годах как костел бернардинок, выдающийся образец виленского барокко." }
+            0: { title: "Площадь Победы", history: "Памятное место в центре Минска в честь подвига народа в годы Великой Отечественной войны. В центре установлен 38-метровый гранитный монумент, у подножия которого горит Вечный огонь." },
+            1: { title: "Музей истории ВОВ", history: "Один из крупнейших в мире музеев, посвященных Второй мировой войне. Открыт в новом величественном здании в 2014 году, символ стойкости народа." },
+            2: { title: "Национальная библиотека Беларуси", history: "Уникальное архитектурное здание в форме ромбокубооктаэдра («алмаза знаний»), открытое в 2006 году. Высота составляет 73,6 метра." },
+            3: { title: "Красный костёл", history: "Католический храм Святых Симеона и Елены в неоготическом стиле на площади Независимости. Возведен в 1910 году на средства Эдварда Войниловича." },
+            4: { title: "Свято-Духов собор", history: "Главный православный храм Минска. Построен в 1633—1642 годах как костел бернардинок, выдающийся образец виленского барокко." }
         };
 
         let classifier;
         const videoElement = document.getElementById('webcam');
         const statusElement = document.getElementById('status');
 
-        // Шаг 1: Гарантированный нативный запуск видеопотока через браузер Android
+        // Шаг 1: Нативный запуск камеры без посредников
         async function setupCamera() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: "environment" }, // Задняя камера смартфона
+                    video: { facingMode: "environment" },
                     audio: false
                 });
                 videoElement.srcObject = stream;
                 return new Promise((resolve) => {
-                    videoElement.onloadedmetadata = () => {
-                        resolve(videoElement);
-                    };
+                    videoElement.onloadedmetadata = () => { resolve(videoElement); };
                 });
             } catch (e) {
-                statusElement.innerText = "Ошибка: Доступ к камере заблокирован смартфоном.";
+                statusElement.innerText = "Ошибка: Доступ к камере заблокирован настройками Android.";
                 statusElement.style.color = "red";
                 throw e;
             }
         }
 
-        // Шаг 2: Инициализация ИИ-модели через ml5.js
+        // Шаг 2: Инициализация ИИ-компонентов из локальной папки
         async function init() {
             try {
                 await setupCamera();
-                statusElement.innerText = "Камера подключена. Интеграция с ИИ-моделью...";
+                statusElement.innerText = "Камера запущена успешно. Чтение файлов ИИ из репозитория...";
                 
-                // Загружаем классификатор ml5 без p5-зависимостей
-                classifier = await ml5.imageClassifier(modelURL + 'model.json', videoElement);
+                // Загружаем ИИ-модель ml5 напрямую из текущей папки вашего сайта
+                classifier = await ml5.imageClassifier(MODEL_PATH, videoElement);
                 
-                statusElement.innerText = "ИИ успешно загружен! Наведите камеру на объект.";
+                statusElement.innerText = "Нейросеть успешно загружена! Наведите камеру на памятник.";
                 statusElement.style.color = "green";
                 
-                // Запускаем непрерывный цикл распознавания кадров
+                // Запуск постоянного цикла распознавания
                 classifyVideo();
             } catch (err) {
-                statusElement.innerText = "Ошибка загрузки модели. Проверьте соединение.";
+                statusElement.innerText = "Ошибка ИИ: Проверьте файлы в репозитории.";
                 statusElement.style.color = "red";
                 console.error(err);
             }
@@ -109,23 +108,33 @@
             }
             
             if (results && results.length > 0) {
-                let bestResult = results[0]; // Элемент с наивысшей уверенностью ИИ
+                let bestResult = results[0]; // Берем самый точный вариант предсказания
                 let bestClass = bestResult.label;
                 let bestScore = bestResult.confidence;
 
-                // Если точность ИИ выше 75%, выводим карточку с историей
-                if (bestScore > 0.75 && CULTURE_DB[bestClass]) {
-                    document.getElementById("res-title").innerText = CULTURE_DB[bestClass].title + ` (${(bestScore * 100).toFixed(0)}%)`;
-                    document.getElementById("res-history").innerText = CULTURE_DB[bestClass].history;
+                // Извлекаем порядковый номер класса из ответа ml5.js
+                // Модель на базе локальных файлов возвращает индексы 0, 1, 2, 3, 4 вместо имен строк
+                let classIndex = parseInt(bestClass) || 0;
+                
+                // На случай если Teachable Machine сохранил текстовые имена классов
+                if (bestClass.includes("Class 1") || bestClass === "0") classIndex = 0;
+                if (bestClass.includes("Class 2") || bestClass === "1") classIndex = 1;
+                if (bestClass.includes("Class 3") || bestClass === "2") classIndex = 2;
+                if (bestClass.includes("Class 4") || bestClass === "3") classIndex = 3;
+                if (bestClass.includes("Class 5") || bestClass === "4") classIndex = 4;
+
+                // Если ИИ уверен больше чем на 70%
+                if (bestScore > 0.70 && CULTURE_DB[classIndex]) {
+                    document.getElementById("res-title").innerText = CULTURE_DB[classIndex].title + ` (${(bestScore * 100).toFixed(0)}%)`;
+                    document.getElementById("res-history").innerText = CULTURE_DB[classIndex].history;
                     document.getElementById("result-card").style.display = "block";
                 }
             }
             
-            // Запрос на обработку следующего кадра видеопотока
             classifyVideo();
         }
 
-        // Старт системы
+        // Запуск всей цепочки
         init();
     </script>
 </body>
